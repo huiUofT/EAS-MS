@@ -26,17 +26,14 @@ You can install the the development version from [GitHub](https://github.com/) w
 
 ``` r
 # install.packages("devtools")
-devtools::install_github("huiUofT/ECPIN")
+devtools::install_github("huiUofT/ASMS_drug")
 ```
-## Example
-
-This is a basic example which shows you how to solve a common problem:
 
 Step 1: loading packages
 ```{r, message=FALSE, warning=FALSE}
   rm(list=ls())
   library(xcms)
-  library(eCPIN)
+  library(ASMSdrug)
   library(devtools)
   library(xlsx)
   library(ChemmineR)
@@ -55,15 +52,19 @@ Step 1: loading packages
   data(iso_list)
   
   #load the library
-  Database<-read_excel("Chemdiv_ASMS_pooled_9K_MSready.xlsx")#This is the chemical library
-  ppmshift_pos<-0#ppm shift for positve 
-  ppmshift_neg<-0#ppm shift for negative
+  Database<-read_excel("EAS_MS_LIB.xlsx")#This is the chemical library
+  ppmshift<-0#ppm shift for positive 
   ppm<-3#ppm for database searching
-  Control<-'MeOH'
+  STD<-'STD'#the standard
+  Control<-'MeOH'#the control of methanol
+  Fold<-2 #the fold change cutoff for hit discovery
+  Ionmode<-'positive'
   
   #'set up the path
   path<-getwd()
   setwd(path)
+  
+  ##split data according to chemical pools
   
 ```
 
@@ -75,78 +76,7 @@ Step 2: splitting to negative and positive spectra
 Step 3: extracting peak features
 ```{r, message=FALSE, warning=FALSE}
   setwd(path)
+  ASMSrun(Ionmode,STD,Control)
+  print('All done!!')
+```
 
-  #extracting peaks, intensity cutoff is 10^6, ppm = 2.5
-  peaks.raw.neg<-Peakextract(10^5,2.5,'negative')##extracting negative data
-  peaks.raw.pos<-Peakextract(10^5,2.5,'positive')##extracting positive data
-  
-  #'Extracting differential peaks
-  #'data has to be organized like NR_XX_X, WT_XX_X, NR_DMSO_X
-  peaks.neg<-LigandFeatureID(peaks.raw.neg,'neg',Control)#This is the function extracting differential peaks compared to controL
-  peaks.pos<-LigandFeatureID(peaks.raw.pos,'pos',Control)#This is the function extracting differential peaks compared to controL
-  
-```
-Step 4: identifying primary isotopic peaks, and remove redudant isotopic peaks
-```{r, message=FALSE, warning=FALSE}
-  #2 ppm is the mass tolerance to find isotopic peaks
-  #'0.80 is the correlation coefficient to extract isotopic peaks
-  #'3 is the intensity ratio cutoff between primary and other isotopic peaks
-  peaks.iso.pos<-FindIsotope(peaks.pos,2,0.80,2,'positive')
-  setwd(path)
-  peaks.iso.neg<-FindIsotope(peaks.neg,2,0.80,2,'negative')
-```
-Step 5: loading database, and do initial searching with exact mass
-```{r, message=FALSE, warning=FALSE}
-  setwd(path)
-  Database<-read_excel("Chemdiv_ASMS_pooled_9K_MSReady.xlsx")#This is a combined database of TSCA, Tox21 and HMDB
-  peaks.iso.pos$mz<-peaks.iso.pos$mz*(1-ppmshift_pos*10^(-6))##simple mass calibration
-  peaks.iso.neg$mz<-peaks.iso.neg$mz*(1-ppmshift_neg*10^(-6))##simple mass calibration
-  Library.pos<-InitialSearch(peaks.iso.pos,ppm,1,Database)
-  Library.neg<-InitialSearch(peaks.iso.neg,ppm,-1,Database)
-  
-  #delete redundant peaks
-  mz<-NULL
-  rt<-NULL
-  indexsave<-NULL
-  for (i in 1:nrow(Library.pos)){
-    index<-which(mz==Library.pos$mz[i])
-    if (length(index)==0){#new mz
-      mz<-c(mz,Library.pos$mz[i])
-      rt<-c(rt,Library.pos$rt[i])
-      next
-    }
-    if (Library.pos$rt[i]==rt[index[1]]){#retention time is identical
-      indexsave<-c(indexsave,i)
-      next
-    }
-    mz<-c(mz,Library.pos$mz[i])
-    rt<-c(rt,Library.pos$rt[i])
-  }
-  if (length(indexsave)>0){
-  Library.pos<-Library.pos[-indexsave,]}
-  
-  #delete redundant peaks
-  mz<-NULL
-  rt<-NULL
-  indexsave<-NULL
-  for (i in 1:nrow(Library.neg)){
-    index<-which(mz==Library.neg$mz[i])
-    if (length(index)==0){#new mz
-      mz<-c(mz,Library.neg$mz[i])
-      rt<-c(rt,Library.neg$rt[i])
-      next
-    }
-    if (Library.neg$rt[i]==rt[index[1]]){#retention time is identical
-      indexsave<-c(indexsave,i)
-      next
-    }
-    mz<-c(mz,Library.neg$mz[i])
-    rt<-c(rt,Library.neg$rt[i])
-  }
-  if (length(indexsave)>0){
-  Library.neg<-Library.neg[-indexsave,]}
-  
-  #'writing the initial searching
-  write.table(Library.pos,file='SGC_9000cpds_pos.csv',sep=',',row.names = FALSE)
-  write.table(Library.neg,file='SGC_9000cpds_neg.csv',sep=',',row.names = FALSE)
-```
